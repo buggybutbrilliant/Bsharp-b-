@@ -4,6 +4,7 @@
   "description": "Syntax highlighting for the B# programming language (.bsharp files)",
   "version": "1.0.0",
   "publisher": "bsharp-lang",
+  "icon": "icon.png",
   "engines": {
     "vscode": "^1.70.0"
   },

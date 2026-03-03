@@ -1,0 +1,20 @@
+{
+  "name": "bsharp-icons",
+  "displayName": "B# File Icons",
+  "description": "File icon theme for B# (.bsharp files)",
+  "version": "1.0.0",
+  "publisher": "bsharp-lang",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": ["Themes"],
+  "contributes": {
+    "iconThemes": [
+      {
+        "id": "bsharp-icons",
+        "label": "B# Icons",
+        "path": "./bsharp-icon-theme.json"
+      }
+    ]
+  }
+}

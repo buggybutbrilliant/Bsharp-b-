@@ -1,0 +1,10 @@
+{
+  "iconDefinitions": {
+    "bsharp-file": {
+      "iconPath": "./icons/bsharp-file.png"
+    }
+  },
+  "fileExtensions": {
+    "bsharp": "bsharp-file"
+  }
+}
