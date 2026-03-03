@@ -359,12 +359,13 @@ class Env:
 
 
 class Runtime:
-    def __init__(self, trace=False, src=None):
+    def __init__(self, trace=False, src=None, script_dir=None):
         self.ge       = Env()
         self.libs     = set()
         self.trace    = trace
         self.src      = src or []
         self.last_op  = None
+        self.script_dir = script_dir
         self._tk_windows = {}
         self._tk_active  = None
         self.stdlib   = {
@@ -454,9 +455,15 @@ class Runtime:
         elif k=='UseLib':
             name=s['name']
             if name not in self.stdlib:
-                avail=', '.join(f'"{m}"' for m in sorted(self.stdlib))
-                raise BSharpError(f'Unknown library "{name}". Available: {avail}', ln)
-            if name not in self.libs:
+                mod = self._load_package(name, ln)
+                if mod is None:
+                    avail=', '.join(f'"{m}"' for m in sorted(self.stdlib))
+                    raise BSharpError(
+                        f'Unknown library "{name}". Not in stdlib and not installed.\n'
+                        f'  Try: bug install {name}', ln)
+                if name not in self.libs:
+                    self.ge.set(name, mod); self.libs.add(name)
+            elif name not in self.libs:
                 mod=self.stdlib[name](); self.ge.set(name,mod); self.libs.add(name)
             self.last_op=f'Loaded library "{name}"'
         elif k=='AddList':
@@ -831,6 +838,33 @@ class Runtime:
             'write_lines': _write_lines,
         })
 
+    def _load_package(self, name, ln=0):
+        """Try to load a community package from bsharp_packages/<n>/<n>.py"""
+        import importlib.util as _ilu
+        variants = [name, name.replace("_", "-")]
+        script_dir = _os.path.dirname(_os.path.abspath(__file__))
+        search_roots = list(dict.fromkeys([_os.getcwd(), self.script_dir or "", script_dir]))
+        for root in search_roots:
+            for folder in variants:
+                pkg_file = _os.path.join(root, "bsharp_packages", folder, folder + ".py")
+                if not _os.path.isfile(pkg_file):
+                    pkg_file = _os.path.join(root, "bsharp_packages", folder, name + ".py")
+                if _os.path.isfile(pkg_file):
+                    try:
+                        spec = _ilu.spec_from_file_location(f"bsharp_pkg_{name}", pkg_file)
+                        mod_py = _ilu.module_from_spec(spec)
+                        spec.loader.exec_module(mod_py)
+                        if not hasattr(mod_py, "load"):
+                            raise BSharpError('Package ' + name + ' missing load() in ' + pkg_file, ln)
+                        result = mod_py.load()
+                        if not (hasattr(result, "name") and hasattr(result, "exports") and isinstance(result.exports, dict)):
+                            raise BSharpError('Package ' + name + ' load() must return ModuleObject', ln)
+                        return ModuleObject(result.name, result.exports)
+                    except BSharpError: raise
+                    except Exception as e:
+                        raise BSharpError('Load failed: ' + str(e), ln)
+        return None
+
     def _load_window(self):
         rt = self
         try:
@@ -885,8 +919,7 @@ class Runtime:
 
         return ModuleObject('window', {'open':_open,'display':_display,'exit':_exit_win})
 
-
-VERSION = "1.1.0-beta"
+VERSION = "1.1.1-beta"
 
 HELP = """
 B# (B-sharp) Programming Language  v{version}
@@ -930,7 +963,8 @@ def _run_file(fname, trace=False):
     try:
         tokens = lex(source)
         prog   = Parser(tokens).parse()
-        Runtime(trace=trace, src=sl).run(prog)
+        script_dir=_os.path.dirname(_os.path.abspath(fname))
+        Runtime(trace=trace, src=sl, script_dir=script_dir).run(prog)
         return True
     except BSharpError as e:
         print(f'\n{"━"*50}\n{e.friendly()}\n{"━"*50}'); return False
@@ -1065,4 +1099,4 @@ def main():
 
 if __name__=='__main__': main()
 # b# for beginners — a simple, readable, fun programming language
-# b# is fun hehe
+# b# is fun HEHEHE
