@@ -1,6 +1,6 @@
 # B# Lexer — tokenises B# source code
 import re
-from core.core import BSharpError
+from bsharp_core.core import BSharpError
 
 KEYWORDS = {
     'let','be','change','to','say','ask','and','store','in','as','if','then','else','end',

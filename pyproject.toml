@@ -1,10 +1,10 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "bsharp-lang"
-version = "1.2.1"
+version = "1.2.3"
 description = "B# — a simple, readable, fun programming language"
 readme = "README.md"
 license = { file = "LICENSE.md" }
@@ -26,12 +26,12 @@ Repository     = "https://github.com/raunaksahahere/bsharp-lang"
 "Bug Tracker"  = "https://github.com/raunaksahahere/bsharp-lang/issues"
 
 [project.scripts]
-bsharp = "core.bsharp:main_entry"
-bug    = "cmd.bug:main"
+bsharp = "bsharp_core.bsharp:main_entry"
+bug    = "bsharp_cmd.bug:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["core*", "cmd*", "tools*"]
+include = ["bsharp_core*", "bsharp_cmd*", "bsharp_tools*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.md", "*.txt", "*.json"]

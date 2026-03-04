@@ -2,13 +2,13 @@
 import sys
 import os      as _os
 import json    as _json
-from core.core       import BSharpError
-from core.lexer       import lex
-from core.parser      import Parser
-from core.compiler    import compile_ast
-from core.vm          import run_chunk
-from core.bytecode    import BSC_VERSION, chunk_to_dict, chunk_from_dict
-from tools.linter      import lint_file, Level
+from bsharp_core.core       import BSharpError
+from bsharp_core.lexer       import lex
+from bsharp_core.parser      import Parser
+from bsharp_core.compiler    import compile_ast
+from bsharp_core.vm          import run_chunk
+from bsharp_core.bytecode    import BSC_VERSION, chunk_to_dict, chunk_from_dict
+from bsharp_tools.linter      import lint_file, Level
 
 VERSION = "1.2.1"
 

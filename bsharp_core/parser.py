@@ -1,7 +1,7 @@
 # B# Parser — builds AST from token stream
 import re
-from core.core import BSharpError
-from core.lexer import MODULE_KEYWORDS
+from bsharp_core.core import BSharpError
+from bsharp_core.lexer import MODULE_KEYWORDS
 
 class Parser:
     def __init__(self, tokens): self.t = tokens; self.pos = 0

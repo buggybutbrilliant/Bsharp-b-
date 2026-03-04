@@ -5,7 +5,7 @@ import random  as _random
 import json    as _json
 import os      as _os
 import time    as _time
-from core.core import BSharpError, BSharpReturn, ModuleObject
+from bsharp_core.core import BSharpError, BSharpReturn, ModuleObject
 
 class Env:
     def __init__(self, parent=None): self.vars={}; self.parent=parent
