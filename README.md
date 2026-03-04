@@ -2,7 +2,7 @@
 
 A human-centric programming language written in plain English.
 
-**Version:** 1.1.0-beta &nbsp;·&nbsp; **Runtime:** Python 3.8+
+**Version:** 1.2.1 &nbsp;·&nbsp; **Runtime:** Python 3.8+
 
 ---
 
@@ -14,6 +14,12 @@ python bsharp.py run examples/hello.bsharp
 
 # Run with step-by-step trace
 python bsharp.py run examples/fibonacci.bsharp --trace
+
+# Compile to bytecode
+python bsharp.py build examples/hello.bsharp
+
+# Lint a file for errors and bad patterns
+python bsharp.py lint examples/hello.bsharp
 
 # Run all tests
 python bsharp.py test
@@ -31,13 +37,35 @@ python bsharp.py help
 
 | Command | Description |
 |---|---|
-| `bsharp run <file>` | Run a B# program |
+| `bsharp run <file>` | Run a `.bsharp` or `.bsc` file |
 | `bsharp run <file> --trace` | Run with step-by-step trace |
 | `bsharp run <file> --debug` | Same as `--trace` |
+| `bsharp run <file> --disasm` | Print bytecode disassembly before running |
+| `bsharp build <file>` | Compile `.bsharp` → `.bsc` bytecode file |
+| `bsharp build <file> --disasm` | Compile and print full bytecode listing |
+| `bsharp lint <file>` | Check for errors, warnings, and bad patterns |
 | `bsharp test` | Run all tests in `tests/cases/` |
 | `bsharp test <folder>` | Run tests in a custom folder |
 | `bsharp version` | Show version, Python runtime, platform |
 | `bsharp help` | Show help |
+
+---
+
+## How Execution Works
+
+B# compiles your source to bytecode before running it:
+
+```
+.bsharp source  →  compiler  →  .bsc bytecode  →  VM
+```
+
+On first run, a `.bsc` cache file is saved next to your source. On subsequent runs, if the source hasn't changed, B# skips recompilation and loads the cache directly — making startup faster.
+
+You can also run a pre-compiled `.bsc` file directly:
+
+```bash
+bsharp run program.bsc
+```
 
 ---
 
@@ -298,20 +326,18 @@ end
 
 ```
 bsharp/
-├── bsharp.py                    ← Interpreter + all standard libraries
+├── bsharp.py           ← Entry point (calls cli.main)
+├── cli.py              ← CLI commands: run, build, lint, test, version
+├── core.py             ← Shared error types and base classes
+├── lexer.py            ← Tokenizer
+├── parser.py           ← AST builder
+├── compiler.py         ← AST → bytecode compiler
+├── bytecode.py         ← Opcode definitions and .bsc format
+├── vm.py               ← Stack-based bytecode virtual machine
+├── linter.py           ← Static analyzer (bsharp lint)
+├── interpreter.py      ← Standard library implementations
 ├── README.md
-├── examples/
-│   ├── hello.bsharp
-│   ├── fibonacci.bsharp
-│   ├── lists_and_strings.bsharp
-│   ├── fizzbuzz.bsharp
-│   ├── error_handling.bsharp
-│   ├── dictionary_demo.bsharp
-│   └── input_demo.bsharp
-├── tests/
-│   ├── cases/                   ← .bsharp test programs
-│   ├── expected/                ← .txt expected outputs
-│   └── runner.py                ← Legacy test runner
+├── LINT_ERRORS.md      ← Linter error and warning reference
 └── vscode-extension/
     ├── package.json
     ├── language-configuration.json

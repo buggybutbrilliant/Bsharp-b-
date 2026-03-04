@@ -2,15 +2,15 @@
 import sys
 import os      as _os
 import json    as _json
-import time    as _time
 from core        import BSharpError
 from lexer       import lex
 from parser      import Parser
 from compiler    import compile_ast
 from vm          import run_chunk
-from bytecode    import BSC_VERSION, chunk_to_dict, chunk_from_dict, Chunk
+from bytecode    import BSC_VERSION, chunk_to_dict, chunk_from_dict
+from linter      import lint_file, Level
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 
 HELP = """
 B# (B-sharp) Programming Language  v{version}
@@ -18,15 +18,15 @@ B# (B-sharp) Programming Language  v{version}
 Usage:
   bsharp run   <file>  [flags]    Run a .bsharp or .bsc file
   bsharp build <file>  [flags]    Compile .bsharp → .bsc bytecode
+  bsharp lint  <file>             Analyse a .bsharp file for warnings
   bsharp test  [folder][flags]    Run all tests in tests/cases/
   bsharp version                  Show version info
   bsharp help                     Show this help
 
 Flags:
-  --trace     Print every statement/instruction as it executes
+  --trace     Print every instruction as it executes
   --debug     Alias for --trace
   --disasm    Print bytecode disassembly before running
-
 
 Standard Libraries  (use <n> to import):
   io      print(v)  input(prompt)  read_file(path)  write_file(path, content)
@@ -45,31 +45,22 @@ Standard Libraries  (use <n> to import):
 """.format(version=VERSION)
 
 
-# ── .bsc helpers 
+# ── .bsc helpers ──────────────────────────────────────────────────────────────
+
 def _bsc_path(bs_path):
-    """Return the .bsc path for a given .bsharp file."""
     return _os.path.splitext(bs_path)[0] + '.bsc'
 
-
 def _bsc_is_fresh(bs_path, bsc_path):
-    """Return True if the .bsc exists and is newer than the .bsharp source."""
-    if not _os.path.isfile(bsc_path):
-        return False
+    if not _os.path.isfile(bsc_path): return False
     try:
-        src_mtime = _os.path.getmtime(bs_path)
-        bsc_mtime = _os.path.getmtime(bsc_path)
-        if bsc_mtime < src_mtime:
-            return False
-        # Also check BSC_VERSION inside the file
+        if _os.path.getmtime(bsc_path) < _os.path.getmtime(bs_path): return False
         with open(bsc_path, 'r', encoding='utf-8') as f:
             data = _json.load(f)
         return data.get('bsc_version') == BSC_VERSION
     except Exception:
         return False
 
-
 def _save_bsc(bs_path, chunk):
-    """Save a compiled Chunk to a .bsc file."""
     bsc_path = _bsc_path(bs_path)
     data = {
         'bsc_version':    BSC_VERSION,
@@ -82,23 +73,20 @@ def _save_bsc(bs_path, chunk):
         _json.dump(data, f)
     return bsc_path
 
-
 def _load_bsc(bsc_path):
-    """Load a Chunk from a .bsc file. Returns chunk or None on error."""
     try:
         with open(bsc_path, 'r', encoding='utf-8') as f:
             data = _json.load(f)
-        if data.get('bsc_version') != BSC_VERSION:
-            return None
+        if data.get('bsc_version') != BSC_VERSION: return None
         return chunk_from_dict(data['chunks'][0])
     except Exception:
         return None
 
 
-# ── Run modes ─────────────────────────────────────────────────────────────────
+# ── Run helpers ───────────────────────────────────────────────────────────────
 
 def _run_vm(fname, trace=False, disasm=False):
-    """Run a .bsharp file using the bytecode VM (with .bsc caching)."""
+    """Compile (or load cached .bsc) and run on VM."""
     try:
         with open(fname, 'r', encoding='utf-8') as f:
             source = f.read()
@@ -110,26 +98,19 @@ def _run_vm(fname, trace=False, disasm=False):
 
     if _bsc_is_fresh(fname, bsc_path):
         chunk = _load_bsc(bsc_path)
-        if trace:
-            print(f'[vm] Using cached bytecode: {bsc_path}')
+        if trace: print(f'[vm] Using cached {bsc_path}')
 
     if chunk is None:
-        if trace:
-            print(f'[vm] Compiling "{fname}"...')
+        if trace: print(f'[vm] Compiling "{fname}"...')
         try:
-            sl     = source.splitlines()
-            tokens = lex(source)
-            prog   = Parser(tokens).parse()
-            chunk  = compile_ast(prog)
+            chunk = compile_ast(Parser(lex(source)).parse())
             _save_bsc(fname, chunk)
-            if trace:
-                print(f'[vm] Saved bytecode → {bsc_path}')
+            if trace: print(f'[vm] Saved → {bsc_path}')
         except BSharpError as e:
             print(f'\n{"━"*50}\n{e.friendly()}\n{"━"*50}'); return False
 
     if disasm:
-        print(chunk.disassemble())
-        print()
+        print(chunk.disassemble()); print()
 
     try:
         script_dir = _os.path.dirname(_os.path.abspath(fname))
@@ -140,7 +121,6 @@ def _run_vm(fname, trace=False, disasm=False):
     except KeyboardInterrupt:
         print('\n[stopped]'); return False
 
-
 def _run_bsc(fname, trace=False, disasm=False):
     """Run a pre-compiled .bsc file directly."""
     chunk = _load_bsc(fname)
@@ -149,8 +129,7 @@ def _run_bsc(fname, trace=False, disasm=False):
         print(f'  Re-compile with: bsharp build <source.bsharp>')
         return False
     if disasm:
-        print(chunk.disassemble())
-        print()
+        print(chunk.disassemble()); print()
     try:
         script_dir = _os.path.dirname(_os.path.abspath(fname))
         run_chunk(chunk, trace=trace, script_dir=script_dir)
@@ -164,74 +143,89 @@ def _run_bsc(fname, trace=False, disasm=False):
 # ── Commands ──────────────────────────────────────────────────────────────────
 
 def cmd_run(argv):
-    """bsharp run <file> [--trace] [--debug] [--disasm]"""
     files  = [a for a in argv if not a.startswith('--')]
     flags  = [a for a in argv if a.startswith('--')]
     trace  = '--trace' in flags or '--debug' in flags
     disasm = '--disasm' in flags
     if not files:
-        print('Usage: bsharp run <file.bsharp|file.bsc> [--trace]')
+        print('Usage: bsharp run <file.bsharp|file.bsc> [--trace] [--disasm]')
         sys.exit(1)
-
     fname = files[0]
-
-    # Running a pre-compiled .bsc file
-    if fname.endswith('.bsc'):
-        ok = _run_bsc(fname, trace=trace, disasm=disasm)
-        sys.exit(0 if ok else 1)
-
-    # Running a .bsharp source file
-    ok = _run_vm(fname, trace=trace, disasm=disasm)
-
+    ok = _run_bsc(fname, trace=trace, disasm=disasm) if fname.endswith('.bsc') \
+         else _run_vm(fname, trace=trace, disasm=disasm)
     sys.exit(0 if ok else 1)
 
 
 def cmd_build(argv):
-    """bsharp build <file.bsharp> [--disasm]"""
     files  = [a for a in argv if not a.startswith('--')]
     flags  = [a for a in argv if a.startswith('--')]
     disasm = '--disasm' in flags
-
     if not files:
         print('Usage: bsharp build <file.bsharp> [--disasm]')
         sys.exit(1)
-
     fname = files[0]
     if not fname.endswith('.bsharp'):
-        print(f'Error: "{fname}" is not a .bsharp file.')
-        sys.exit(1)
-
+        print(f'Error: "{fname}" is not a .bsharp file.'); sys.exit(1)
     if not _os.path.isfile(fname):
-        print(f'Error: File "{fname}" not found.')
-        sys.exit(1)
-
+        print(f'Error: File "{fname}" not found.'); sys.exit(1)
     print(f'Compiling {fname}...')
     try:
-        with open(fname, 'r', encoding='utf-8') as f:
-            source = f.read()
-        tokens = lex(source)
-        prog   = Parser(tokens).parse()
-        chunk  = compile_ast(prog)
+        with open(fname, 'r', encoding='utf-8') as f: source = f.read()
+        chunk = compile_ast(Parser(lex(source)).parse())
     except BSharpError as e:
-        print(f'\n{"━"*50}\n{e.friendly()}\n{"━"*50}')
+        print(f'\n{"━"*50}\n{e.friendly()}\n{"━"*50}'); sys.exit(1)
+    bsc_path = _save_bsc(fname, chunk)
+    print(f'  Done  →  {bsc_path}  ({len(chunk)} instructions)')
+    if disasm:
+        print(); print(chunk.disassemble())
+
+
+def cmd_lint(argv):
+    files = [a for a in argv if not a.startswith('--')]
+    if not files:
+        print('Usage: bsharp lint <file.bsharp>'); sys.exit(1)
+
+    fname = files[0]
+    bar   = '─' * 50
+    print(f'\nB# Linter  v{VERSION}  —  {fname}\n{bar}')
+
+    warnings, err = lint_file(fname)
+
+    if err:
+        print(f'\n  Parse error: {err.friendly()}\n{bar}\n')
         sys.exit(1)
 
-    bsc_path = _save_bsc(fname, chunk)
-    print(f'  Done  →  {bsc_path}')
-    print(f'  {len(chunk)} instructions')
+    if not warnings:
+        print('  No issues found.  ✓\n' + bar + '\n')
+        sys.exit(0)
 
-    if disasm:
-        print()
-        print(chunk.disassemble())
+    warnings.sort(key=lambda w: w.line)
+    errors = [w for w in warnings if w.level == Level.ERROR]
+    warns  = [w for w in warnings if w.level == Level.WARNING]
+    infos  = [w for w in warnings if w.level == Level.INFO]
+
+    if errors:
+        print(f'\n  Errors ({len(errors)}):')
+        for w in errors: print(w)
+    if warns:
+        print(f'\n  Warnings ({len(warns)}):')
+        for w in warns:  print(w)
+    if infos:
+        print(f'\n  Info ({len(infos)}):')
+        for w in infos:  print(w)
+
+    print(f'\n{bar}')
+    print(f'  {len(errors)} error(s)   {len(warns)} warning(s)   {len(infos)} info   — {len(warnings)} total')
+    print(bar + '\n')
+    sys.exit(1 if errors else 0)
 
 
 def cmd_test(argv):
-    """bsharp test [folder] [--trace|--debug]"""
     import glob, io as _io
-
     flags      = [a for a in argv if a.startswith('--')]
     positional = [a for a in argv if not a.startswith('--')]
     trace      = '--trace' in flags or '--debug' in flags
+
     if positional:
         test_root = positional[0]
     else:
@@ -261,9 +255,7 @@ def cmd_test(argv):
         buf = _io.StringIO(); old_out = sys.stdout; sys.stdout = buf
         error_msg = None
         try:
-            with open(path, 'r', encoding='utf-8') as f:
-                source = f.read()
-            sl = source.splitlines()
+            with open(path, 'r', encoding='utf-8') as f: source = f.read()
             chunk = compile_ast(Parser(lex(source)).parse())
             run_chunk(chunk, trace=trace)
         except BSharpError as e:
@@ -304,7 +296,6 @@ def cmd_test(argv):
 
 
 def cmd_version():
-    """bsharp version"""
     print(f'B# (B-sharp) Programming Language')
     print(f'Version  : {VERSION}')
     print(f'Runtime  : Python {sys.version.split()[0]}')
@@ -314,34 +305,21 @@ def cmd_version():
 
 def main():
     argv = sys.argv[1:]
-
     if not argv or argv[0] in ('help', '--help', '-h'):
         print(HELP); return
-
     cmd = argv[0]
-
-    if cmd in ('version', '--version', '-v'):
-        cmd_version(); return
-
-    if cmd == 'run':
-        cmd_run(argv[1:]); return
-
-    if cmd == 'build':
-        cmd_build(argv[1:]); return
-
-    if cmd == 'test':
-        cmd_test(argv[1:]); return
-
-    # Legacy fallback: python bsharp.py <file.bsharp>
+    if cmd in ('version', '--version', '-v'): cmd_version(); return
+    if cmd == 'run':     cmd_run(argv[1:]);   return
+    if cmd == 'build':   cmd_build(argv[1:]); return
+    if cmd == 'lint':    cmd_lint(argv[1:]);  return
+    if cmd == 'test':    cmd_test(argv[1:]);  return
+    # Legacy: python bsharp.py file.bsharp
     if cmd.endswith('.bsharp') or cmd.endswith('.bsc') or _os.path.isfile(cmd):
-        flags  = argv[1:]
-        trace  = '--trace' in flags or '--debug' in flags
-        if cmd.endswith('.bsc'):
-            sys.exit(0 if _run_bsc(cmd, trace=trace) else 1)
-        else:
-            sys.exit(0 if _run_vm(cmd, trace=trace) else 1)
+        flags = argv[1:]
+        trace = '--trace' in flags or '--debug' in flags
+        ok = _run_bsc(cmd, trace=trace) if cmd.endswith('.bsc') else _run_vm(cmd, trace=trace)
+        sys.exit(0 if ok else 1)
         return
-
     print(f'Unknown command "{cmd}". Run "bsharp help" for usage.')
     sys.exit(1)
 
