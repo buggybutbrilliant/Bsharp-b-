@@ -1,0 +1,706 @@
+note =====================================================================
+note  VOID DEFENDER — A Space Shooter written in B#
+note  Arrow Keys: Move   Space: Fire   Escape: Quit
+note =====================================================================
+
+use window
+use list
+use random
+use math
+
+note open game window
+call window.open with "VOID DEFENDER"
+
+note ─────────────────────────────────────────────
+note  STAR BACKGROUND  (30 stars)
+note ─────────────────────────────────────────────
+let star_x be list of 0
+let star_y be list of 0
+let star_sz be list of 1
+for each si from 1 to 29 do
+  add 0 to star_x
+  add 0 to star_y
+  add 1 to star_sz
+end
+for each si from 0 to 29 do
+  change star_x  to call list.set with star_x  and si and call random.int with 5 and 795
+  change star_y  to call list.set with star_y  and si and call random.int with 30 and 570
+  change star_sz to call list.set with star_sz and si and call random.int with 1 and 3
+end
+
+note ─────────────────────────────────────────────
+note  PLAYER BULLETS  (3 max)
+note ─────────────────────────────────────────────
+let pb_x  be list of 0, 0, 0
+let pb_y  be list of 0, 0, 0
+let pb_on be list of 0, 0, 0
+
+note ─────────────────────────────────────────────
+note  ENEMY BULLETS  (5 max)
+note ─────────────────────────────────────────────
+let eb_x  be list of 0, 0, 0, 0, 0
+let eb_y  be list of 0, 0, 0, 0, 0
+let eb_on be list of 0, 0, 0, 0, 0
+
+note ─────────────────────────────────────────────
+note  ENEMY GRID  (5 rows x 10 cols = 50 enemies)
+note  type 2 = red boss (row 0)
+note  type 1 = yellow medium (rows 1-2)
+note  type 0 = cyan basic (rows 3-4)
+note ─────────────────────────────────────────────
+let en_x     be list of 0
+let en_y     be list of 0
+let en_alive be list of 0
+let en_type  be list of 0
+for each eni from 1 to 49 do
+  add 0 to en_x
+  add 0 to en_y
+  add 0 to en_alive
+  add 0 to en_type
+end
+for each row from 0 to 4 do
+  for each col from 0 to 9 do
+    let idx be row times 10 plus col
+    change en_x     to call list.set with en_x     and idx and col times 70 plus 60
+    change en_y     to call list.set with en_y     and idx and row times 52 plus 65
+    change en_alive to call list.set with en_alive and idx and 1
+    if row is equal to 0 then
+      change en_type to call list.set with en_type and idx and 2
+    else if row is at most 2 then
+      change en_type to call list.set with en_type and idx and 1
+    else
+      change en_type to call list.set with en_type and idx and 0
+    end
+  end
+end
+
+note ─────────────────────────────────────────────
+note  BARRIERS  (4 barriers, 4 HP each)
+note ─────────────────────────────────────────────
+let bar_x  be list of 95, 285, 475, 665
+let bar_hp be list of 4, 4, 4, 4
+
+note ─────────────────────────────────────────────
+note  GAME STATE VARS
+note ─────────────────────────────────────────────
+let px          be 380
+let py          be 520
+let fire_cd     be 0
+let score       be 0
+let lives       be 3
+let wave        be 1
+let en_dir      be 1
+let en_move_cd  be 0
+let en_speed    be 18
+let en_shot_cd  be 0
+let en_shot_rt  be 55
+let anim        be 0
+let fc          be 0
+let game_state  be "title"
+let running     be true
+
+note ─────────────────────────────────────────────
+note  DRAWING FUNCTIONS
+note ─────────────────────────────────────────────
+
+define function draw_basic with x and y and af do
+  note cyan basic invader
+  call window.rect with x plus 2 and y and 16 and 11 and "#00ccaa"
+  call window.rect with x and y plus 4 and 20 and 7 and "#00ccaa"
+  call window.rect with x plus 4 and y minus 4 and 3 and 5 and "#00ccaa"
+  call window.rect with x plus 13 and y minus 4 and 3 and 5 and "#00ccaa"
+  call window.rect with x plus 4 and y plus 2 and 3 and 3 and "black"
+  call window.rect with x plus 13 and y plus 2 and 3 and 3 and "black"
+  if af is equal to 0 then
+    call window.rect with x and y plus 11 and 4 and 5 and "#00ccaa"
+    call window.rect with x plus 16 and y plus 11 and 4 and 5 and "#00ccaa"
+  else
+    call window.rect with x plus 3 and y plus 11 and 4 and 5 and "#00ccaa"
+    call window.rect with x plus 13 and y plus 11 and 4 and 5 and "#00ccaa"
+  end
+end
+
+define function draw_medium with x and y and af do
+  note yellow medium invader
+  call window.rect with x plus 1 and y and 22 and 10 and "#f5c518"
+  call window.rect with x plus 5 and y minus 5 and 14 and 7 and "#f5c518"
+  call window.oval with x plus 7 and y minus 8 and 10 and 7 and "#f5c518"
+  call window.rect with x plus 5 and y plus 1 and 4 and 4 and "black"
+  call window.rect with x plus 15 and y plus 1 and 4 and 4 and "black"
+  call window.oval with x plus 9 and y plus 3 and 6 and 4 and "#c8a000"
+  if af is equal to 0 then
+    call window.rect with x minus 5 and y plus 4 and 6 and 4 and "#f5c518"
+    call window.rect with x plus 23 and y plus 4 and 6 and 4 and "#f5c518"
+  else
+    call window.rect with x minus 5 and y plus 7 and 6 and 4 and "#f5c518"
+    call window.rect with x plus 23 and y plus 7 and 6 and 4 and "#f5c518"
+  end
+end
+
+define function draw_boss with x and y and af do
+  note red boss invader
+  call window.rect with x and y and 28 and 12 and "#dd1133"
+  call window.rect with x plus 5 and y minus 7 and 18 and 9 and "#dd1133"
+  call window.oval with x plus 8 and y minus 11 and 12 and 8 and "#ff3355"
+  call window.oval with x plus 4 and y minus 4 and 6 and 6 and "#ffcc00"
+  call window.oval with x plus 18 and y minus 4 and 6 and 6 and "#ffcc00"
+  call window.rect with x plus 6 and y minus 2 and 3 and 3 and "black"
+  call window.rect with x plus 20 and y minus 2 and 3 and 3 and "black"
+  call window.rect with x plus 8 and y plus 12 and 5 and 5 and "#dd1133"
+  call window.rect with x plus 15 and y plus 12 and 5 and 5 and "#dd1133"
+  if af is equal to 0 then
+    call window.rect with x minus 8 and y plus 4 and 9 and 4 and "#dd1133"
+    call window.rect with x plus 27 and y plus 4 and 9 and 4 and "#dd1133"
+  else
+    call window.rect with x minus 8 and y plus 2 and 9 and 4 and "#dd1133"
+    call window.rect with x plus 27 and y plus 2 and 9 and 4 and "#dd1133"
+  end
+end
+
+define function draw_ship with x and y do
+  note player spaceship
+  call window.rect with x minus 3 and y plus 5 and 26 and 15 and "#89b4fa"
+  call window.rect with x plus 7 and y and 6 and 7 and "#89b4fa"
+  call window.oval with x plus 8 and y minus 5 and 4 and 7 and "#cba6f7"
+  call window.rect with x minus 16 and y plus 10 and 14 and 8 and "#74c7ec"
+  call window.rect with x minus 20 and y plus 14 and 6 and 4 and "#89b4fa"
+  call window.rect with x plus 22 and y plus 10 and 14 and 8 and "#74c7ec"
+  call window.rect with x plus 34 and y plus 14 and 6 and 4 and "#89b4fa"
+  call window.oval with x plus 4 and y plus 18 and 7 and 5 and "#fab387"
+  call window.oval with x plus 9 and y plus 19 and 5 and 4 and "#ff8800"
+  call window.oval with x plus 10 and y plus 18 and 7 and 5 and "#fab387"
+end
+
+
+define function zeros3 do
+  let z be list of 0, 0, 0
+  return z
+end
+
+define function zeros5 do
+  let z be list of 0, 0, 0, 0, 0
+  return z
+end
+
+define function fullhp do
+  let z be list of 4, 4, 4, 4
+  return z
+end
+
+note ─────────────────────────────────────────────
+note  TITLE SCREEN LOOP
+note ─────────────────────────────────────────────
+let title_f be 0
+while game_state is equal to "title" do
+  change title_f to title_f plus 1
+  call window.clear with "#000010"
+  note draw stars
+  for each si from 0 to 29 do
+    let tx be call list.get with star_x and si
+    let ty be call list.get with star_y and si
+    let ts be call list.get with star_sz and si
+    call window.oval with tx and ty and ts and ts and "#888888"
+  end
+  note decorative alien showcase
+  call draw_boss   with 340 and 180 and 0
+  call draw_medium with 390 and 210 and 0
+  call draw_basic  with 448 and 240 and 0
+  note title box
+  call window.rect with 160 and 130 and 480 and 90 and "#0a0a2a"
+  call window.line with 160 and 130 and 640 and 130 and "#89b4fa"
+  call window.line with 160 and 220 and 640 and 220 and "#89b4fa"
+  call window.text with 176 and 142 and "V O I D   D E F E N D E R" and "#89b4fa" and 28
+  note instructions
+  call window.text with 240 and 262 and "ARROW KEYS  Move ship" and "#cdd6f4" and 14
+  call window.text with 258 and 286 and "SPACE       Fire laser" and "#cdd6f4" and 14
+  call window.text with 258 and 310 and "ESCAPE      Quit game" and "#cdd6f4" and 14
+  note score legend
+  call window.rect with 240 and 350 and 320 and 80 and "#0d0d1e"
+  call window.rect with 255 and 360 and 9 and 9 and "#dd1133"
+  call window.text with 272 and 358 and "BOSS  = 50 pts" and "#dd1133" and 12
+  call window.rect with 255 and 378 and 9 and 9 and "#f5c518"
+  call window.text with 272 and 376 and "MED   = 20 pts" and "#f5c518" and 12
+  call window.rect with 255 and 396 and 9 and 9 and "#00ccaa"
+  call window.text with 272 and 394 and "BASIC = 10 pts" and "#00ccaa" and 12
+  note start prompt
+  call window.rect with 258 and 450 and 284 and 34 and "#1a2a1a"
+  call window.text with 275 and 458 and "PRESS ENTER TO START" and "#a6e3a1" and 13
+  let can_start be 0
+  if title_f is greater than 20 then
+    change can_start to 1
+  end
+  if call window.key_down with "Return" then
+    if can_start is equal to 1 then
+      change game_state to "playing"
+    end
+  end
+  change running to call window.update with 30
+  if running is equal to false then
+    change game_state to "quit"
+  end
+end
+
+note ─────────────────────────────────────────────
+note  MAIN GAME LOOP
+note ─────────────────────────────────────────────
+while game_state is equal to "playing" do
+
+  note frame counter and animation toggle
+  change fc to fc plus 1
+  let fc_mod be fc modulo 30
+  if fc_mod is equal to 0 then
+    if anim is equal to 0 then
+      change anim to 1
+    else
+      change anim to 0
+    end
+  end
+
+  note ── CLEAR ──────────────────────────────────
+  call window.clear with "#000010"
+
+  note ── STARS ─────────────────────────────────
+  for each si from 0 to 29 do
+    let tx be call list.get with star_x  and si
+    let ty be call list.get with star_y  and si
+    let ts be call list.get with star_sz and si
+    call window.oval with tx and ty and ts and ts and "#666677"
+  end
+
+  note ── HUD TOP BAR ────────────────────────────
+  call window.rect with 0 and 0 and 800 and 30 and "#0a0a1a"
+  call window.line with 0 and 30 and 800 and 30 and "#223344"
+  let hud_sc be "SCORE: " plus score
+  let hud_lv be "LIVES: " plus lives
+  let hud_wv be "WAVE: "  plus wave
+  call window.text with 12  and 6 and hud_sc and "#89b4fa" and 13
+  call window.text with 340 and 6 and hud_lv and "#a6e3a1" and 13
+  call window.text with 660 and 6 and hud_wv and "#f9e2af" and 13
+
+  note ── BARRIERS ──────────────────────────────
+  for each bi from 0 to 3 do
+    let bhp be call list.get with bar_hp and bi
+    if bhp is greater than 0 then
+      let bx be call list.get with bar_x and bi
+      note bunker top
+      if bhp is at least 3 then
+        call window.rect with bx plus 10 and 436 and 40 and 14 and "#00cc66"
+        call window.rect with bx and 450 and 20 and 14 and "#00cc66"
+        call window.rect with bx plus 40 and 450 and 20 and 14 and "#00cc66"
+        call window.rect with bx plus 20 and 450 and 20 and 14 and "#000010"
+      end
+      if bhp is equal to 2 then
+        call window.rect with bx plus 10 and 436 and 35 and 14 and "yellow"
+        call window.rect with bx and 450 and 60 and 14 and "yellow"
+        call window.rect with bx plus 20 and 450 and 20 and 14 and "#000010"
+      end
+      if bhp is equal to 1 then
+        call window.rect with bx and 450 and 60 and 14 and "#ff4400"
+      end
+    end
+  end
+
+  note ── BOTTOM LINE ───────────────────────────
+  call window.line with 0 and 575 and 800 and 575 and "#334455"
+
+  note ── ENEMIES ───────────────────────────────
+  for each ei from 0 to 49 do
+    let ea be call list.get with en_alive and ei
+    if ea is equal to 1 then
+      let ex be call list.get with en_x    and ei
+      let ey be call list.get with en_y    and ei
+      let et be call list.get with en_type and ei
+      if et is equal to 0 then
+        call draw_basic  with ex and ey and anim
+      end
+      if et is equal to 1 then
+        call draw_medium with ex and ey and anim
+      end
+      if et is equal to 2 then
+        call draw_boss   with ex and ey and anim
+      end
+    end
+  end
+
+  note ── PLAYER ────────────────────────────────
+  call draw_ship with px and py
+
+  note ── PLAYER BULLETS ────────────────────────
+  for each pbi from 0 to 2 do
+    let pon be call list.get with pb_on and pbi
+    if pon is equal to 1 then
+      let pbx be call list.get with pb_x and pbi
+      let pby be call list.get with pb_y and pbi
+      call window.rect with pbx and pby          and 3 and 14 and "#f5c2e7"
+      call window.oval with pbx minus 1 and pby minus 3 and 5 and 6 and "white"
+    end
+  end
+
+  note ── ENEMY BULLETS ─────────────────────────
+  for each ebi from 0 to 4 do
+    let eon be call list.get with eb_on and ebi
+    if eon is equal to 1 then
+      let ebx be call list.get with eb_x and ebi
+      let eby be call list.get with eb_y and ebi
+      call window.rect with ebx and eby          and 3 and 12 and "#ff6600"
+      call window.oval with ebx minus 1 and eby minus 2 and 5 and 5 and "#ffaa44"
+    end
+  end
+
+  note ── INPUT: MOVE ────────────────────────────
+  if call window.key_down with "Left" then
+    if px is greater than 22 then
+      change px to px minus 5
+    end
+  end
+  if call window.key_down with "Right" then
+    if px is at most 752 then
+      change px to px plus 5
+    end
+  end
+  if call window.key_down with "Escape" then
+    change game_state to "quit"
+  end
+
+  note ── INPUT: FIRE ────────────────────────────
+  if fire_cd is greater than 0 then
+    change fire_cd to fire_cd minus 1
+  end
+  if call window.key_down with "space" then
+    if fire_cd is equal to 0 then
+      let got_slot be 0
+      for each pbi from 0 to 2 do
+        let pon be call list.get with pb_on and pbi
+        if pon is equal to 0 and got_slot is equal to 0 then
+          change pb_x  to call list.set with pb_x  and pbi and px plus 10
+          change pb_y  to call list.set with pb_y  and pbi and py minus 4
+          change pb_on to call list.set with pb_on and pbi and 1
+          change fire_cd  to 14
+          change got_slot to 1
+        end
+      end
+    end
+  end
+
+  note ── UPDATE: PLAYER BULLETS ─────────────────
+  for each pbi from 0 to 2 do
+    let pon be call list.get with pb_on and pbi
+    if pon is equal to 1 then
+      let pby be call list.get with pb_y and pbi
+      let nby be pby minus 9
+      if nby is at most 30 then
+        change pb_on to call list.set with pb_on and pbi and 0
+      else
+        change pb_y to call list.set with pb_y and pbi and nby
+      end
+    end
+  end
+
+  note ── UPDATE: ENEMY BULLETS ──────────────────
+  for each ebi from 0 to 4 do
+    let eon be call list.get with eb_on and ebi
+    if eon is equal to 1 then
+      let eby be call list.get with eb_y and ebi
+      let nby be eby plus 5
+      if nby is at least 590 then
+        change eb_on to call list.set with eb_on and ebi and 0
+      else
+        change eb_y to call list.set with eb_y and ebi and nby
+      end
+    end
+  end
+
+  note ── UPDATE: ENEMY GROUP MOVEMENT ───────────
+  change en_move_cd to en_move_cd plus 1
+  if en_move_cd is at least en_speed then
+    change en_move_cd to 0
+    note find leftmost and rightmost alive enemy
+    let min_ex be 800
+    let max_ex be 0
+    for each ei from 0 to 49 do
+      let ea be call list.get with en_alive and ei
+      if ea is equal to 1 then
+        let ex be call list.get with en_x and ei
+        if ex is less than min_ex then
+          change min_ex to ex
+        end
+        if ex is greater than max_ex then
+          change max_ex to ex
+        end
+      end
+    end
+    note check if group hits wall
+    let wall_hit be 0
+    if en_dir is equal to 1 and max_ex is at least 752 then
+      change wall_hit to 1
+    end
+    if en_dir is equal to 0 minus 1 and min_ex is at most 18 then
+      change wall_hit to 1
+    end
+    if wall_hit is equal to 1 then
+      note reverse direction and drop down
+      change en_dir to 0 minus en_dir
+      for each ei from 0 to 49 do
+        let ea be call list.get with en_alive and ei
+        if ea is equal to 1 then
+          let ey be call list.get with en_y and ei
+          change en_y to call list.set with en_y and ei and ey plus 16
+        end
+      end
+    else
+      note move sideways
+      let dx be en_dir times 8
+      for each ei from 0 to 49 do
+        let ea be call list.get with en_alive and ei
+        if ea is equal to 1 then
+          let ex be call list.get with en_x and ei
+          change en_x to call list.set with en_x and ei and ex plus dx
+        end
+      end
+    end
+  end
+
+  note ── ENEMY SHOOTING ─────────────────────────
+  change en_shot_cd to en_shot_cd plus 1
+  if en_shot_cd is at least en_shot_rt then
+    change en_shot_cd to 0
+    let scol be call random.int with 0 and 9
+    let shooter be 0 minus 1
+    for each srow from 0 to 4 do
+      let sidx be srow times 10 plus scol
+      let sea be call list.get with en_alive and sidx
+      if sea is equal to 1 then
+        change shooter to sidx
+      end
+    end
+    if shooter is not equal to 0 minus 1 then
+      let got_es be 0
+      for each ebi from 0 to 4 do
+        let eon be call list.get with eb_on and ebi
+        if eon is equal to 0 and got_es is equal to 0 then
+          let sx be call list.get with en_x and shooter
+          let sy be call list.get with en_y and shooter
+          change eb_x  to call list.set with eb_x  and ebi and sx plus 12
+          change eb_y  to call list.set with eb_y  and ebi and sy plus 14
+          change eb_on to call list.set with eb_on and ebi and 1
+          change got_es to 1
+        end
+      end
+    end
+  end
+
+  note ── COLLISION: PLAYER BULLETS vs ENEMIES ───
+  for each pbi from 0 to 2 do
+    let pon be call list.get with pb_on and pbi
+    if pon is equal to 1 then
+      let pbx be call list.get with pb_x and pbi
+      let pby be call list.get with pb_y and pbi
+      for each ei from 0 to 49 do
+        let ea be call list.get with en_alive and ei
+        if ea is equal to 1 then
+          let ex be call list.get with en_x and ei
+          let ey be call list.get with en_y and ei
+          let cdx be pbx minus ex
+          let cdy be pby minus ey
+          let hx be 0
+          let hy be 0
+          if cdx is at least 0 and cdx is at most 24 then
+            change hx to 1
+          end
+          if cdy is at least 0 minus 12 and cdy is at most 18 then
+            change hy to 1
+          end
+          if hx is equal to 1 and hy is equal to 1 then
+            change pb_on    to call list.set with pb_on    and pbi and 0
+            change en_alive to call list.set with en_alive and ei  and 0
+            let et be call list.get with en_type and ei
+            if et is equal to 0 then
+              change score to score plus 10
+            end
+            if et is equal to 1 then
+              change score to score plus 20
+            end
+            if et is equal to 2 then
+              change score to score plus 50
+            end
+          end
+        end
+      end
+    end
+  end
+
+  note ── COLLISION: PLAYER BULLETS vs BARRIERS ──
+  for each pbi from 0 to 2 do
+    let pon be call list.get with pb_on and pbi
+    if pon is equal to 1 then
+      let pbx be call list.get with pb_x and pbi
+      let pby be call list.get with pb_y and pbi
+      for each bri from 0 to 3 do
+        let bhp be call list.get with bar_hp and bri
+        if bhp is greater than 0 then
+          let brx be call list.get with bar_x and bri
+          let bdx be pbx minus brx
+          let bdy be pby minus 436
+          let bhx be 0
+          let bhy be 0
+          if bdx is at least 0 and bdx is at most 60 then
+            change bhx to 1
+          end
+          if bdy is at least 0 and bdy is at most 28 then
+            change bhy to 1
+          end
+          if bhx is equal to 1 and bhy is equal to 1 then
+            change pb_on  to call list.set with pb_on  and pbi and 0
+            change bar_hp to call list.set with bar_hp and bri and bhp minus 1
+          end
+        end
+      end
+    end
+  end
+
+  note ── COLLISION: ENEMY BULLETS vs BARRIERS ───
+  for each ebi from 0 to 4 do
+    let eon be call list.get with eb_on and ebi
+    if eon is equal to 1 then
+      let ebx be call list.get with eb_x and ebi
+      let eby be call list.get with eb_y and ebi
+      for each bri from 0 to 3 do
+        let bhp be call list.get with bar_hp and bri
+        if bhp is greater than 0 then
+          let brx be call list.get with bar_x and bri
+          let bdx be ebx minus brx
+          let bdy be eby minus 436
+          let bhx be 0
+          let bhy be 0
+          if bdx is at least 0 and bdx is at most 60 then
+            change bhx to 1
+          end
+          if bdy is at least 0 and bdy is at most 28 then
+            change bhy to 1
+          end
+          if bhx is equal to 1 and bhy is equal to 1 then
+            change eb_on  to call list.set with eb_on  and ebi and 0
+            change bar_hp to call list.set with bar_hp and bri and bhp minus 1
+          end
+        end
+      end
+    end
+  end
+
+  note ── COLLISION: ENEMY BULLETS vs PLAYER ─────
+  for each ebi from 0 to 4 do
+    let eon be call list.get with eb_on and ebi
+    if eon is equal to 1 then
+      let ebx be call list.get with eb_x and ebi
+      let eby be call list.get with eb_y and ebi
+      let pdx be ebx minus px
+      let pdy be eby minus py
+      let phx be 0
+      let phy be 0
+      if pdx is at least 0 minus 20 and pdx is at most 40 then
+        change phx to 1
+      end
+      if pdy is at least 0 and pdy is at most 22 then
+        change phy to 1
+      end
+      if phx is equal to 1 and phy is equal to 1 then
+        change eb_on to call list.set with eb_on and ebi and 0
+        change lives  to lives minus 1
+        change px     to 380
+        change pb_on  to call zeros3
+      end
+    end
+  end
+
+  note ── CHECK: ENEMIES REACHED BOTTOM ──────────
+  for each ei from 0 to 49 do
+    let ea be call list.get with en_alive and ei
+    if ea is equal to 1 then
+      let ey be call list.get with en_y and ei
+      if ey is at least 480 then
+        change lives to 0
+      end
+    end
+  end
+
+  note ── CHECK LOSE ─────────────────────────────
+  if lives is at most 0 then
+    change game_state to "gameover"
+  end
+
+  note ── COUNT ALIVE + WAVE CLEAR ────────────────
+  let alive_n be 0
+  for each ei from 0 to 49 do
+    let ea be call list.get with en_alive and ei
+    if ea is equal to 1 then
+      change alive_n to alive_n plus 1
+    end
+  end
+
+  if alive_n is equal to 0 then
+    change wave to wave plus 1
+    note speed up next wave
+    change en_speed  to en_speed  minus 2
+    change en_shot_rt to en_shot_rt minus 4
+    if en_speed is at most 5 then
+      change en_speed to 5
+    end
+    if en_shot_rt is at most 18 then
+      change en_shot_rt to 18
+    end
+    note respawn enemies at base positions
+    for each row from 0 to 4 do
+      for each col from 0 to 9 do
+        let idx be row times 10 plus col
+        change en_x     to call list.set with en_x     and idx and col times 70 plus 60
+        change en_y     to call list.set with en_y     and idx and row times 52 plus 65
+        change en_alive to call list.set with en_alive and idx and 1
+      end
+    end
+    change en_dir    to 1
+    change en_move_cd to 0
+    change pb_on to call zeros3
+    change eb_on to call zeros5
+    change bar_hp to call fullhp
+  end
+
+  note ── TICK ───────────────────────────────────
+  change running to call window.update with 60
+  if running is equal to false then
+    change game_state to "quit"
+  end
+
+end
+
+note ─────────────────────────────────────────────
+note  GAME OVER SCREEN
+note ─────────────────────────────────────────────
+while game_state is equal to "gameover" do
+  call window.clear with "#060006"
+  note draw dim stars
+  for each si from 0 to 29 do
+    let tx be call list.get with star_x and si
+    let ty be call list.get with star_y and si
+    call window.oval with tx and ty and 2 and 2 and "#333333"
+  end
+  note panel
+  call window.rect with 180 and 170 and 440 and 220 and "#150010"
+  call window.line with 180 and 170 and 620 and 170 and "#ff2244"
+  call window.line with 180 and 390 and 620 and 390 and "#ff2244"
+  call window.text with 248 and 188 and "GAME  OVER" and "#ff2244" and 32
+  call window.line with 190 and 252 and 610 and 252 and "#441122"
+  let go_sc be "SCORE  :  " plus score
+  let go_wv be "WAVES  :  " plus wave
+  call window.text with 268 and 265 and go_sc and "white"   and 18
+  call window.text with 268 and 298 and go_wv and "#f9e2af" and 18
+  call window.line with 190 and 338 and 610 and 338 and "#441122"
+  call window.text with 218 and 352 and "PRESS ESCAPE TO QUIT" and "#888888" and 13
+  if call window.key_down with "Escape" then
+    change game_state to "quit"
+    call window.exit
+  end
+  change running to call window.update with 30
+  if running is equal to false then
+    change game_state to "quit"
+  end
+end

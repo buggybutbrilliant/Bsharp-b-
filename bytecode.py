@@ -2,7 +2,7 @@
 # This file is the single source of truth for all VM instructions.
 # Both compiler.py and vm.py import from here.
 
-# ── Opcodes 
+# ── Opcodes ───────────────────────────────────────────────────────────────────
 
 class Op:
     # Stack operations
@@ -79,7 +79,7 @@ class Op:
     EXPLAIN         = 'EXPLAIN'         # print last operation description
 
 
-# ── Instruction 
+# ── Instruction ───────────────────────────────────────────────────────────────
 
 class Instruction:
     """A single bytecode instruction."""
@@ -95,7 +95,7 @@ class Instruction:
         return f'{self.op:<20}{arg_str}'
 
 
-# ── Bytecode chunk 
+# ── Bytecode chunk ────────────────────────────────────────────────────────────
 
 class Chunk:
     """
@@ -137,7 +137,7 @@ class Chunk:
         return len(self.instructions)
 
 
-# ── .bsc file format 
+# ── .bsc file format ─────────────────────────────────────────────────────────
 # .bsc files are JSON with this structure:
 # {
 #   "bsc_version": 1,
@@ -159,24 +159,39 @@ class Chunk:
 BSC_VERSION = 1
 
 
+def _serialize_arg(arg):
+    """Recursively serialize an instruction arg — handles nested Chunks."""
+    if isinstance(arg, Chunk):
+        return {'__chunk__': chunk_to_dict(arg)}
+    if isinstance(arg, (list, tuple)):
+        return [_serialize_arg(a) for a in arg]
+    return arg
+
+def _deserialize_arg(arg):
+    """Recursively deserialize an instruction arg — restores nested Chunks."""
+    if isinstance(arg, dict) and '__chunk__' in arg:
+        return chunk_from_dict(arg['__chunk__'])
+    if isinstance(arg, list):
+        return [_deserialize_arg(a) for a in arg]
+    return arg
+
 def chunk_to_dict(chunk):
     """Serialise a Chunk to a JSON-compatible dict."""
     return {
         'name':         chunk.name,
         'constants':    chunk.constants,
         'instructions': [
-            {'op': i.op, 'arg': i.arg, 'line': i.line}
+            {'op': i.op, 'arg': _serialize_arg(i.arg), 'line': i.line}
             for i in chunk.instructions
         ]
     }
-
 
 def chunk_from_dict(d):
     """Deserialise a Chunk from a dict."""
     c = Chunk(d['name'])
     c.constants = d['constants']
     c.instructions = [
-        Instruction(i['op'], i['arg'], i['line'])
+        Instruction(i['op'], _deserialize_arg(i['arg']), i['line'])
         for i in d['instructions']
     ]
     return c

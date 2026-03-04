@@ -7,7 +7,7 @@ from core      import BSharpError, BSharpReturn, ModuleObject
 from bytecode  import Op
 from interpreter import Runtime as _InterpRuntime, Env
 
-# ── VM Frame 
+# ── VM Frame ─────────────────────────────────────────────────────────────────
 
 class Frame:
     """A single call frame — one function invocation or the top-level program."""
@@ -25,7 +25,7 @@ class Frame:
     def instr(self):    return self.chunk.instructions[self.ip]
 
 
-# ── VM 
+# ── VM ────────────────────────────────────────────────────────────────────────
 
 class VM:
     """
@@ -56,7 +56,7 @@ class VM:
         # Try/catch handler stack: list of (frame_index, catch_ip, err_var)
         self._try_stack = []
 
-    # ── Public entry point 
+    # ── Public entry ─────────────────────────────────────────────────────────
 
     def run(self, chunk):
         """Run a top-level Chunk. Returns None."""
@@ -70,7 +70,7 @@ class VM:
             except Exception:
                 pass
 
-    # ── Main execution loop 
+    # ── Main execution loop ───────────────────────────────────────────────────
 
     def _execute(self):
         while self._frames:
@@ -91,7 +91,7 @@ class VM:
             frame.ip += 1
 
             try:
-                # ── Stack 
+                # ── Stack ──────────────────────────────────────────────────
                 if op == Op.LOAD_CONST:
                     frame.push(arg)
 
@@ -126,7 +126,7 @@ class VM:
                 elif op == Op.NOP:
                     pass
 
-                # ── Arithmetic 
+                # ── Arithmetic ────────────────────────────────────────────
                 elif op == Op.ADD:
                     r = frame.pop(); l = frame.pop()
                     if isinstance(l, str) or isinstance(r, str):
@@ -151,7 +151,7 @@ class VM:
                     if r == 0: raise BSharpError('Cannot compute remainder when dividing by zero.', ln)
                     frame.push(l % r)
 
-                # ── Comparison 
+                # ── Comparison ────────────────────────────────────────────
                 elif op == Op.CMP_EQ:    r=frame.pop(); l=frame.pop(); frame.push(l == r)
                 elif op == Op.CMP_NEQ:   r=frame.pop(); l=frame.pop(); frame.push(l != r)
                 elif op == Op.CMP_GT:    r=frame.pop(); l=frame.pop(); frame.push(l > r)
@@ -161,7 +161,7 @@ class VM:
                 elif op == Op.CMP_IN:    r=frame.pop(); l=frame.pop(); frame.push(l in r)
                 elif op == Op.CMP_NOTIN: r=frame.pop(); l=frame.pop(); frame.push(l not in r)
 
-                # ── Logic 
+                # ── Logic ─────────────────────────────────────────────────
                 elif op == Op.NOT:
                     frame.push(not self._truthy(frame.pop()))
 
@@ -173,7 +173,7 @@ class VM:
                     r = frame.pop(); l = frame.pop()
                     frame.push(self._truthy(l) or self._truthy(r))
 
-                # ── Jumps 
+                # ── Jumps ─────────────────────────────────────────────────
                 elif op == Op.JUMP:
                     frame.ip = arg
 
@@ -186,11 +186,8 @@ class VM:
                     v = frame.pop()
                     if self._truthy(v):
                         frame.ip = arg
-                    # leave v on stack (short-circuit result)
-                    else:
-                        frame.push(v)
 
-                # ── I/O 
+                # ── I/O ───────────────────────────────────────────────────
                 elif op == Op.PRINT:
                     items = [frame.pop() for _ in range(arg)][::-1]
                     print(' '.join(self._tostr(i) for i in items))
@@ -205,7 +202,7 @@ class VM:
                     raw    = input(self._tostr(prompt) + ' ')
                     frame.push(self._coerce(raw, arg, ln))
 
-                # ── Functions 
+                # ── Functions ─────────────────────────────────────────────
                 elif op == Op.MAKE_FUNC:
                     name, params, fn_chunk = arg
                     # Push the function dict — STORE_VAR (emitted by compiler) will store it
@@ -276,7 +273,7 @@ class VM:
                         self._frames[-1].push(ret_val)
                     # Don't return — let the main loop continue with caller frame
 
-                # ── Collections 
+                # ── Collections ───────────────────────────────────────────
                 elif op == Op.BUILD_LIST:
                     items = [frame.pop() for _ in range(arg)][::-1]
                     frame.push(items)
@@ -346,7 +343,7 @@ class VM:
                             f'join needs a list, got {self._desc(lst)}', ln)
                     frame.push(self._tostr(sep).join(self._tostr(i) for i in lst))
 
-                # ── Files 
+                # ── Files ─────────────────────────────────────────────────
                 elif op == Op.READ_FILE:
                     fn = self._tostr(frame.pop())
                     try:
@@ -366,7 +363,7 @@ class VM:
                         f.write(v)
                     self.last_op = f'Wrote {len(v)} chars to "{fn}"'
 
-                # ── Libraries 
+                # ── Libraries ─────────────────────────────────────────────
                 elif op == Op.USE_LIB:
                     name = arg
                     if name not in self.libs:
@@ -383,7 +380,7 @@ class VM:
                         self.libs.add(name)
                     self.last_op = f'Loaded library "{name}"'
 
-                # ── Error handling 
+                # ── Error handling ────────────────────────────────────────
                 elif op == Op.TRY_START:
                     # arg = catch block IP
                     self._try_stack.append((len(self._frames) - 1, arg, None))
@@ -396,7 +393,7 @@ class VM:
                     # arg = err_var name — error already stored by exception handler
                     pass
 
-                # ── Misc 
+                # ── Misc ──────────────────────────────────────────────────
                 elif op == Op.EXPLAIN:
                     print(f'[explain] {self.last_op or "No operation performed yet."}')
 
@@ -423,7 +420,7 @@ class VM:
                 else:
                     raise
 
-    # ── Helpers 
+    # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _truthy(self, v):
         if v is None:             return False
@@ -470,7 +467,7 @@ class VM:
         return v
 
 
-# ── Convenience function 
+# ── Convenience function ──────────────────────────────────────────────────────
 
 def run_chunk(chunk, trace=False, script_dir=None):
     """Run a compiled Chunk in the VM."""

@@ -536,47 +536,122 @@ class Runtime:
                 'window library requires tkinter.\n'
                 '  Linux: sudo apt-get install python3-tk\n'
                 '  macOS: install Python from python.org')
+        import time as _tm
 
-        BG = '#1e1e2e'; SURFACE = '#313244'; FG = '#cdd6f4'
-        ACCENT = '#89b4fa'; FONT = ('Courier New',13); FONT_H = ('Courier New',10,'bold')
+        _state = {
+            'root': None, 'canvas': None,
+            'keys': set(), 'closed': False,
+            'last_frame': 0.0,
+        }
 
-        def _open(title='B# Window'):
-            title = str(title)
-            if title in rt._tk_windows:
-                rt._tk_active = title
-                return None
-            if not rt._tk_windows:
-                root = tk.Tk()
-            else:
-                root = tk.Toplevel()
-            root.title(title); root.geometry('720x460')
-            root.configure(bg=BG); root.resizable(True, True)
-            hdr = tk.Frame(root, bg=SURFACE, height=32); hdr.pack(fill='x', side='top')
-            tk.Label(hdr, text=f'  ♯  {title}', bg=SURFACE, fg=ACCENT,
-                     font=FONT_H, anchor='w').pack(side='left', padx=8, pady=6)
-            cf = tk.Frame(root, bg=BG); cf.pack(fill='both', expand=True, padx=16, pady=16)
-            tv = tk.StringVar(value='')
-            tk.Label(cf, textvariable=tv, bg=BG, fg=FG, font=FONT,
-                     wraplength=680, justify='left', anchor='nw').pack(fill='both', expand=True)
-            rt._tk_windows[title] = {'root': root, 'tv': tv}
-            rt._tk_active = title
+        def _open(title='B# Game'):
+            if _state['root'] is not None: return None
+            root = tk.Tk()
+            root.title(str(title))
+            root.resizable(True, True)
+            root.geometry('800x600')
+            canvas = tk.Canvas(root, width=800, height=600,
+                               bg='black', highlightthickness=0)
+            canvas.pack()
+            def _kp(e): _state['keys'].add(e.keysym)
+            def _kr(e): _state['keys'].discard(e.keysym)
+            def _close():
+                _state['closed'] = True
+                try: root.destroy()
+                except: pass
+            root.bind('<KeyPress>',   _kp)
+            root.bind('<KeyRelease>', _kr)
+            root.protocol('WM_DELETE_WINDOW', _close)
+            root.focus_force()
+            _state['root'] = root; _state['canvas'] = canvas
             root.update()
             return None
 
+        def _clear(color='black'):
+            c = _state.get('canvas')
+            if c is None: return None
+            c.delete('all')
+            c.configure(bg=str(color))
+            return None
+
+        def _rect(x, y, w, h, fill='white'):
+            c = _state.get('canvas')
+            if c is None: return None
+            x,y,w,h = float(x),float(y),float(w),float(h)
+            c.create_rectangle(x, y, x+w, y+h, fill=str(fill), outline='')
+            return None
+
+        def _oval(x, y, w, h, fill='white'):
+            c = _state.get('canvas')
+            if c is None: return None
+            x,y,w,h = float(x),float(y),float(w),float(h)
+            c.create_oval(x, y, x+w, y+h, fill=str(fill), outline='')
+            return None
+
+        def _text(x, y, msg, color='white', size=14):
+            c = _state.get('canvas')
+            if c is None: return None
+            c.create_text(float(x), float(y), text=str(msg),
+                          fill=str(color),
+                          font=('Courier New', max(1,int(size)), 'bold'),
+                          anchor='nw')
+            return None
+
+        def _line(x1, y1, x2, y2, color='white'):
+            c = _state.get('canvas')
+            if c is None: return None
+            c.create_line(float(x1),float(y1),float(x2),float(y2),
+                          fill=str(color), width=2)
+            return None
+
+        def _key_down(key):
+            k = str(key)
+            return (k in _state['keys'] or
+                    k.lower() in _state['keys'] or
+                    k.capitalize() in _state['keys'])
+
+        def _update(fps=60):
+            if _state['closed']: return False
+            r = _state.get('root')
+            if r is None: return False
+            try: r.update()
+            except Exception:
+                _state['closed'] = True; return False
+            now    = _tm.time()
+            target = 1.0 / max(1, float(fps))
+            diff   = now - _state['last_frame']
+            if diff < target: _tm.sleep(target - diff)
+            _state['last_frame'] = _tm.time()
+            return not _state['closed']
+
+        def _width():  return 800
+        def _height(): return 600
+
         def _display(content):
-            if rt._tk_active is None or rt._tk_active not in rt._tk_windows:
-                raise BSharpError('window.display: no window is open — call window.open first')
-            win = rt._tk_windows[rt._tk_active]
-            win['tv'].set(rt.tostr(content))
-            win['root'].update()
+            c = _state.get('canvas')
+            if c is None: return None
+            c.create_text(10, 10, text=str(content),
+                          fill='#cdd6f4', font=('Courier New', 13), anchor='nw')
+            r = _state.get('root')
+            if r:
+                try: r.update()
+                except: pass
             return None
 
         def _exit_win():
-            if rt._tk_active and rt._tk_active in rt._tk_windows:
-                try: rt._tk_windows[rt._tk_active]['root'].destroy()
-                except Exception: pass
-                del rt._tk_windows[rt._tk_active]
-                rt._tk_active = next(iter(rt._tk_windows), None)
+            r = _state.get('root')
+            if r:
+                try: r.destroy()
+                except: pass
+            _state['closed'] = True
+            _state['root'] = None; _state['canvas'] = None
             return None
 
-        return ModuleObject('window', {'open':_open,'display':_display,'exit':_exit_win})
+        return ModuleObject('window', {
+            'open':     _open,   'clear':    _clear,
+            'rect':     _rect,   'oval':     _oval,
+            'text':     _text,   'line':     _line,
+            'key_down': _key_down, 'update': _update,
+            'width':    _width,  'height':   _height,
+            'display':  _display,'exit':     _exit_win,
+        })

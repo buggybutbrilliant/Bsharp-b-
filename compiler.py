@@ -10,7 +10,7 @@ class Compiler:
         self.chunk   = Chunk('<main>')
         self._stack  = [self.chunk]   # chunk stack for nested functions
 
-    # ── Public entry point 
+    # ── Public entry point ────────────────────────────────────────────────────
 
     def compile(self, ast):
         """Compile a Program AST node. Returns the top-level Chunk."""
@@ -21,7 +21,7 @@ class Compiler:
         self._emit(Op.HALT)
         return self.chunk
 
-    # ── Helpers 
+    # ── Helpers ───────────────────────────────────────────────────────────────
 
     @property
     def _cur(self):
@@ -37,7 +37,7 @@ class Compiler:
     def _patch(self, idx, target):
         self._cur.patch(idx, target)
 
-    # ── Statements 
+    # ── Statements ────────────────────────────────────────────────────────────
 
     def _stmt(self, s):
         k = s['kind']; ln = s.get('line', 0)
@@ -126,7 +126,7 @@ class Compiler:
         for s in stmts:
             self._stmt(s)
 
-    # ── Control flow 
+    # ── Control flow ──────────────────────────────────────────────────────────
 
     def _compile_if(self, s):
         ln = s.get('line', 0)
@@ -265,7 +265,7 @@ class Compiler:
         self._block(s['catch_body'])
         self._patch(jump_over, self._here())
 
-    # ── Expressions 
+    # ── Expressions ───────────────────────────────────────────────────────────
 
     def _expr(self, x):
         if x is None:
@@ -361,14 +361,19 @@ class Compiler:
         ln = x.get('line', 0)
         if x['op'] == 'and':
             self._expr(x['left'])
-            # Short-circuit: if left is false, skip right
+            # DUP so result stays on stack if we short-circuit
+            self._emit(Op.DUP, None, ln)
             jf = self._emit(Op.JUMP_IF_FALSE, None, ln)
+            # Left was truthy — discard the dup, evaluate right as result
             self._emit(Op.POP, None, ln)
             self._expr(x['right'])
             self._patch(jf, self._here())
         else:  # or
             self._expr(x['left'])
+            # DUP so result stays on stack if we short-circuit
+            self._emit(Op.DUP, None, ln)
             jt = self._emit(Op.JUMP_IF_TRUE, None, ln)
+            # Left was falsy — discard the dup, evaluate right as result
             self._emit(Op.POP, None, ln)
             self._expr(x['right'])
             self._patch(jt, self._here())
@@ -378,7 +383,7 @@ class Compiler:
         self._expr(node)
 
 
-# ── Convenience function 
+# ── Convenience function ──────────────────────────────────────────────────────
 
 def compile_ast(ast):
     """Compile a parsed B# AST. Returns the main Chunk."""
