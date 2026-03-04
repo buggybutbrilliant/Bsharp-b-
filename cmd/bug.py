@@ -6,7 +6,7 @@ from urllib.error   import URLError, HTTPError
 BUG_VERSION   = "1.1.1"
 PACKAGES_DIR  = "bsharp_packages"
 MANIFEST_FILE = "bsharp.json"
-REGISTRY_URL  = "https://raw.githubusercontent.com/buggybutbrilliant/bsharp-b--packages/main/registry.json"
+REGISTRY_URL  = "https://raw.githubusercontent.com/raunaksahahere/bsharp-b--packages/main/registry.json"
 
 def _c(t, c): return f'\033[{c}m{t}\033[0m'
 def green(t):  return _c(t, '32')
@@ -186,7 +186,7 @@ def cmd_publish(_):
 {BAR}
 
 All packages live inside registry.json in:
-  {cyan("https://github.com/buggybutbrilliant/bsharp-b--packages")}
+  {cyan("https://github.com/raunaksahahere/bsharp-b--packages")}
 
 Add your entry to registry.json like this:
 

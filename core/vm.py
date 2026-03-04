@@ -3,9 +3,9 @@
 
 import sys
 import os as _os
-from core      import BSharpError, BSharpReturn, ModuleObject
-from bytecode  import Op
-from interpreter import Runtime as _InterpRuntime, Env
+from core.core      import BSharpError, BSharpReturn, ModuleObject
+from core.bytecode  import Op
+from core.interpreter import Runtime as _InterpRuntime, Env
 
 # ── VM Frame ─────────────────────────────────────────────────────────────────
 

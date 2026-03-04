@@ -1,7 +1,7 @@
 # B# Linter / Static Analyzer
-from core   import BSharpError
-from lexer  import lex
-from parser import Parser
+from core.core import BSharpError
+from core.lexer import lex
+from core.parser import Parser
 
 class Level:
     ERROR   = 'error'

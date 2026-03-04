@@ -2,8 +2,8 @@
 # Input:  AST (dict) from parser.py
 # Output: Chunk (from bytecode.py)
 
-from core     import BSharpError
-from bytecode import Op, Chunk
+from core.core import BSharpError
+from core.bytecode import Op, Chunk
 
 class Compiler:
     def __init__(self):
