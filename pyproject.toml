@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "bsharp-lang"
+version = "1.2.1"
+description = "B# — a simple, readable, fun programming language"
+readme = "README.md"
+license = { file = "LICENSE.md" }
+requires-python = ">=3.10"
+keywords = ["programming-language", "interpreter", "bytecode", "compiler", "bsharp"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Other",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Interpreters",
+    "Topic :: Software Development :: Compilers",
+    "Environment :: Console",
+]
+
+[project.urls]
+Homepage       = "https://github.com/raunaksahahere/bsharp-lang"
+Repository     = "https://github.com/raunaksahahere/bsharp-lang"
+"Bug Tracker"  = "https://github.com/raunaksahahere/bsharp-lang/issues"
+
+[project.scripts]
+bsharp = "core.bsharp:main_entry"
+bug    = "cmd.bug:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "cmd*", "tools*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.md", "*.txt", "*.json"]
